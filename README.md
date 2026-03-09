@@ -1,38 +1,68 @@
-# Oh My Waifu - AI 아바타 어시스턴트
+# Oh My Waifu
 
-로컬에서 동작하는 AI 아바타 어시스턴트 시스템. 3D VRM 캐릭터가 TTS 음성과 lipsync로 대화하며, OpenClaw를 통해 LLM 추론 및 툴 실행을 수행한다.
+> Your local AI waifu, fully self-hosted.
 
-## 아키텍처
+A self-hosted AI avatar assistant with a 3D VRM character that speaks via TTS with real-time lipsync. Supports multiple LLM backends and TTS engines through a plugin architecture.
+
+## Architecture
 
 ```
-Web Frontend (React + Three.js + VRM)
-    ↕ WebSocket
+React + Three.js + VRM (Browser)
+        ↕ WebSocket
 FastAPI Backend (Python)
-    ↕ HTTP (OpenAI 호환)
-OpenClaw Gateway → ollama (qwen3.5:9b)
+        ↕ OpenAI-compatible API
+LLM Provider (Ollama / OpenAI / GitHub Copilot / OpenClaw)
 ```
 
-## 요구사항
+## Features
 
-- macOS (Apple Silicon)
-- Python 3.11+
+- **3D Avatar** — VRM character rendering with idle animations and eye blinking
+- **Lipsync** — Real-time mouth movement synced to TTS audio (rhubarb-lip-sync or volume-based fallback)
+- **Voice Input** — Browser-based STT via faster-whisper with voice activity detection
+- **Pluggable LLM** — Ollama, OpenAI API, GitHub Copilot, OpenClaw (config-switchable)
+- **Pluggable TTS** — Kokoro, Edge TTS (config-switchable)
+- **Streaming** — Token-by-token LLM responses via WebSocket
+
+## Prerequisites
+
+- Python 3.10+
 - Node.js 18+
-- ollama (qwen3.5:9b)
-- OpenClaw Gateway (별도 서버)
+- An LLM backend (e.g., [Ollama](https://ollama.com))
+- A VRM character model (download from [VRoid Hub](https://hub.vroid.com))
 
-## 빠른 시작
+## Quick Start
 
-### 1. 백엔드
+```bash
+# 1. Clone
+git clone https://github.com/skysrd/oh-my-waifu.git
+cd oh-my-waifu
+
+# 2. Place your VRM model
+cp /path/to/your-character.vrm frontend/public/models/avatar.vrm
+
+# 3. Run
+./start.sh
+```
+
+Open **http://localhost:5173** in your browser.
+
+### Manual Setup
+
+<details>
+<summary>Backend</summary>
 
 ```bash
 cd backend
-python3.11 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-### 2. 프론트엔드
+</details>
+
+<details>
+<summary>Frontend</summary>
 
 ```bash
 cd frontend
@@ -40,11 +70,90 @@ npm install
 npm run dev
 ```
 
-### 3. 설정
+</details>
 
-`config.yaml`에서 OpenClaw Gateway URL, TTS 엔진, STT 모델 등을 설정한다.
+## Configuration
 
-## VRM 캐릭터
+All settings are managed in `config.yaml`.
 
-`models/` 디렉토리에 `.vrm` 파일을 배치하고, `config.yaml`의 `avatar.vrm_path`를 수정한다.
-VRoid Hub(https://hub.vroid.com/)에서 다운로드 가능.
+### LLM Provider
+
+```yaml
+llm:
+  engine: "ollama"          # "ollama" | "openai" | "copilot" | "openclaw"
+
+  ollama:
+    url: "http://127.0.0.1:11434"
+    model: "qwen3:8b"
+
+  openai:
+    api_key: "sk-..."
+    model: "gpt-4o"
+
+  copilot:
+    model: "gpt-4o"         # Uses local VS Code Copilot token automatically
+```
+
+### TTS Engine
+
+```yaml
+tts:
+  engine: "edge-tts"        # "edge-tts" | "kokoro"
+
+  edge_tts:
+    voice: "ko-KR-SunHiNeural"
+
+  kokoro:
+    voice: "af_heart"
+    lang_code: "a"
+```
+
+### Other Settings
+
+| Key | Description |
+|-----|-------------|
+| `stt.model_size` | Whisper model: `tiny`, `base`, `small`, `medium`, `large-v3` |
+| `stt.language` | Recognition language (e.g., `ko`, `en`, `ja`) |
+| `lipsync.method` | `rhubarb` (accurate) or `simple` (volume-based fallback) |
+| `avatar.vrm_path` | Path to VRM character model |
+
+## Project Structure
+
+```
+backend/
+├── main.py              # FastAPI app (WebSocket + REST)
+├── llm/                 # LLM plugin architecture
+│   ├── base.py          #   LLMEngine ABC
+│   ├── openai_compat.py #   Ollama / OpenAI / OpenClaw
+│   └── copilot.py       #   GitHub Copilot
+├── tts/                 # TTS plugin architecture
+│   ├── base.py          #   TTSEngine ABC
+│   ├── kokoro_tts.py    #   Kokoro TTS
+│   └── edge_tts_engine.py # Edge TTS
+├── stt.py               # faster-whisper STT
+└── lipsync.py           # Lipsync data generation
+
+frontend/src/
+├── components/
+│   └── AvatarCanvas.jsx # Three.js + VRM canvas
+├── hooks/
+│   ├── useWebSocket.js  # Real-time communication
+│   ├── useAudio.js      # Mic capture + TTS playback
+│   └── useLipsync.js    # Lipsync synchronization
+└── lib/
+    ├── avatar.js        # VRM blendshape control
+    ├── audio.js         # Audio utilities (WAV encode, VAD)
+    └── ws.js            # WebSocket client
+```
+
+## Adding a New LLM or TTS Provider
+
+Both LLM and TTS use the same plugin pattern. To add a new provider:
+
+1. Create a class implementing `LLMEngine` or `TTSEngine`
+2. Register it in the corresponding `registry.py`
+3. Add a config section in `config.yaml`
+
+## License
+
+MIT
