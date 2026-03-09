@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from config import load_config
 from lipsync import LipsyncGenerator
-from openclaw import OpenClawClient
+from llm import create_llm_engine
 from stt import WhisperSTT
 from tts import create_tts_engine
 
@@ -33,11 +33,7 @@ app.add_middleware(
 )
 
 # 서비스 초기화
-openclaw = OpenClawClient(
-    base_url=config["openclaw"]["url"],
-    api_key=config["openclaw"].get("api_key", ""),
-    model=config["openclaw"].get("model", "default"),
-)
+llm_engine = create_llm_engine(config)
 tts_engine = create_tts_engine(config)
 stt_engine = WhisperSTT(config)
 lipsync_gen = LipsyncGenerator(config)
@@ -45,12 +41,14 @@ lipsync_gen = LipsyncGenerator(config)
 
 @app.on_event("startup")
 async def startup():
+    await llm_engine.initialize()
     await tts_engine.initialize()
     logger.info("서버 시작 완료")
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    await llm_engine.shutdown()
     await tts_engine.shutdown()
 
 
@@ -65,6 +63,7 @@ async def get_config():
     return {
         "avatar": config.get("avatar", {}),
         "tts": {"engine": config["tts"]["engine"]},
+        "llm": {"engine": config["llm"]["engine"]},
     }
 
 
@@ -75,7 +74,9 @@ async def chat(body: dict):
     if not message:
         return JSONResponse({"error": "message required"}, status_code=400)
 
-    response = await openclaw.chat_simple(message)
+    response = await llm_engine.chat(
+        [{"role": "user", "content": message}]
+    )
     return {"response": response}
 
 
@@ -120,18 +121,11 @@ async def _handle_chat(ws: WebSocket, data: dict, messages: list[dict]):
 
     messages.append({"role": "user", "content": user_msg})
 
-    # OpenClaw 스트리밍 응답
+    # LLM 스트리밍 응답
     full_response = ""
-    async for chunk_data in openclaw.chat(messages, stream=True):
-        try:
-            chunk = json.loads(chunk_data)
-            delta = chunk.get("choices", [{}])[0].get("delta", {})
-            content = delta.get("content", "")
-            if content:
-                full_response += content
-                await ws.send_json({"type": "chat_response", "text": content, "done": False})
-        except json.JSONDecodeError:
-            continue
+    async for content in llm_engine.chat_stream(messages):
+        full_response += content
+        await ws.send_json({"type": "chat_response", "text": content, "done": False})
 
     await ws.send_json({"type": "chat_response", "text": "", "done": True})
     messages.append({"role": "assistant", "content": full_response})
