@@ -29,6 +29,7 @@ Thumbs.db
 # Models (large files)
 models/*.vrm
 !models/.gitkeep
+frontend/public/models/*.vrm
 
 # Logs
 *.log

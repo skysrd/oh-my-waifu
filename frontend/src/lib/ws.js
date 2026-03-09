@@ -2,7 +2,7 @@
  * WebSocket 클라이언트
  */
 
-const WS_URL = `ws://${window.location.hostname}:8000/ws`;
+const WS_URL = `ws://${window.location.host}/ws`;
 
 export class WebSocketClient {
   constructor(onMessage) {
