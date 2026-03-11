@@ -16,6 +16,8 @@ function App() {
     currentResponse,
     ttsAudio,
     lipsyncData,
+    emotion,
+    conversationState,
     sendChat,
     sendAudio,
     setTtsAudio,
@@ -25,6 +27,19 @@ function App() {
   const { isRecording, isPlaying, startRecording, stopRecording, playTTS } =
     useAudio();
   const { applyLipsync, stopLipsync } = useLipsync(avatarRef);
+
+  // 감정 + 대화 상태를 아바타에 전달
+  useEffect(() => {
+    const avatar = avatarRef.current;
+    if (!avatar) return;
+    avatar.setEmotion(emotion);
+  }, [emotion]);
+
+  useEffect(() => {
+    const avatar = avatarRef.current;
+    if (!avatar) return;
+    avatar.setConversationState(conversationState);
+  }, [conversationState]);
 
   // TTS 오디오 수신 시 재생
   useEffect(() => {

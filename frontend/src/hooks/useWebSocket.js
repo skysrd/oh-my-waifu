@@ -3,6 +3,7 @@ import { WebSocketClient } from "../lib/ws";
 
 /**
  * WebSocket 연결 관리 훅
+ * emotion, conversationState 포함
  */
 export function useWebSocket() {
   const clientRef = useRef(null);
@@ -12,6 +13,8 @@ export function useWebSocket() {
   const [ttsAudio, setTtsAudio] = useState(null);
   const [lipsyncData, setLipsyncData] = useState(null);
   const [sttResult, setSttResult] = useState(null);
+  const [emotion, setEmotion] = useState("neutral");
+  const [conversationState, setConversationState] = useState("idle");
 
   const handleMessage = useCallback((data) => {
     switch (data.type) {
@@ -19,8 +22,10 @@ export function useWebSocket() {
         if (data.done) {
           setMessages((prev) => [...prev, { role: "assistant", content: currentResponse }]);
           setCurrentResponse("");
+          setConversationState("done");
         } else {
           setCurrentResponse((prev) => prev + data.text);
+          setConversationState("responding");
         }
         break;
       case "tts_audio":
@@ -33,8 +38,12 @@ export function useWebSocket() {
         setSttResult(data.text);
         setMessages((prev) => [...prev, { role: "user", content: data.text }]);
         break;
+      case "emotion":
+        setEmotion(data.emotion);
+        break;
       case "error":
         console.error("서버 오류:", data.message);
+        setConversationState("idle");
         break;
     }
   }, [currentResponse]);
@@ -57,10 +66,12 @@ export function useWebSocket() {
   const sendChat = useCallback((message) => {
     setMessages((prev) => [...prev, { role: "user", content: message }]);
     clientRef.current?.sendChat(message);
+    setConversationState("thinking");
   }, []);
 
   const sendAudio = useCallback((base64Data) => {
     clientRef.current?.sendAudio(base64Data);
+    setConversationState("listening");
   }, []);
 
   return {
@@ -70,6 +81,8 @@ export function useWebSocket() {
     ttsAudio,
     lipsyncData,
     sttResult,
+    emotion,
+    conversationState,
     sendChat,
     sendAudio,
     setTtsAudio,

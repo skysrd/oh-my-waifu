@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import load_config
+from emotion import detect_emotion
 from lipsync import LipsyncGenerator
 from llm import create_llm_engine
 from stt import WhisperSTT
@@ -129,6 +130,10 @@ async def _handle_chat(ws: WebSocket, data: dict, messages: list[dict]):
 
     await ws.send_json({"type": "chat_response", "text": "", "done": True})
     messages.append({"role": "assistant", "content": full_response})
+
+    # 감정 분석
+    emotion = detect_emotion(full_response)
+    await ws.send_json({"type": "emotion", "emotion": emotion})
 
     # TTS + Lipsync 생성
     if full_response.strip():
